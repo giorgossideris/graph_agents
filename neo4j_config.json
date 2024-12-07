@@ -1,0 +1,6 @@
+{
+    "uri": "<your-neo4j-uri>",
+    "username": "neo4j",
+    "password": "<your-neo4j-password>",
+    "database" : "neo4j"
+}
