@@ -1,19 +1,11 @@
 """Module for loading graph data into Neo4j database, based on https://github.com/microsoft/graphrag/commit/cb0aae7e6bf1763ca5a7540d2220c11162863915"""
-import json
-
 import pandas as pd
 from neo4j import GraphDatabase
-
-with open("neo4j_config.json") as f:
-    config = json.load(f)
 
 INDEXING_FOLDER = "graph_agents_indexing/output"
 
 
-# Create a Neo4j driver
-driver = GraphDatabase.driver(config["uri"], auth=(config["username"], config["password"]))
-
-def batched_import(statement: str, df: pd.DataFrame, batch_size: int=1000) -> None:
+def batched_import(driver: GraphDatabase.driver, statement: str, df: pd.DataFrame, batch_size: int=1000) -> None:
     """
     Import a dataframe into Neo4j using a batched approach.
 
@@ -28,12 +20,15 @@ def batched_import(statement: str, df: pd.DataFrame, batch_size: int=1000) -> No
         driver.execute_query(
             "UNWIND $rows AS value " + statement,
             rows=batch.to_dict("records"),
-            database_=config["database"],
+            database_="neo4j",
         )
 
-def create_constraints() -> None:
+def create_constraints(driver: GraphDatabase.driver) -> None:
     """
     Create constraints in the Neo4j database.
+
+    Parameters:
+        driver (GraphDatabase.driver): Neo4j driver.
     """
     statements = """
     create constraint chunk_id if not exists for (c:__Chunk__) require c.id is unique;
@@ -50,9 +45,12 @@ def create_constraints() -> None:
             driver.execute_query(statement)
 
 
-def load_documents() -> None:
+def load_documents(driver: GraphDatabase.driver) -> None:
     """
     Import documents into the Neo4j database.
+
+    Parameters:
+        driver (GraphDatabase.driver): Neo4j driver.
     """
     doc_df = pd.read_parquet(
         f"{INDEXING_FOLDER}/create_final_documents.parquet", columns=["id", "title"]
@@ -63,11 +61,14 @@ def load_documents() -> None:
     SET d += value {.title}
     """
 
-    batched_import(statement, doc_df)
+    batched_import(driver, statement, doc_df)
 
-def load_text_units() -> None:
+def load_text_units(driver: GraphDatabase.driver) -> None:
     """
     Import text units into the Neo4j database.
+
+    Parameters:
+        driver (GraphDatabase.driver): Neo4j driver.
     """
     text_df = pd.read_parquet(
         f"{INDEXING_FOLDER}/create_final_text_units.parquet",
@@ -83,11 +84,14 @@ def load_text_units() -> None:
     MERGE (c)-[:PART_OF]->(d)
     """
 
-    batched_import(statement, text_df)
+    batched_import(driver, statement, text_df)
 
-def load_nodes() -> None:
+def load_nodes(driver: GraphDatabase.driver) -> None:
     """
     Import nodes into the Neo4j database.
+
+    Parameters:
+        driver (GraphDatabase.driver): Neo4j driver.
     """
     entity_df = pd.read_parquet(
         f"{INDEXING_FOLDER}/create_final_entities.parquet",
@@ -115,11 +119,14 @@ def load_nodes() -> None:
     MERGE (c)-[:HAS_ENTITY]->(e)
     """
 
-    batched_import(entity_statement, entity_df)
+    batched_import(driver, entity_statement, entity_df)
 
-def load_relationships() -> None:
+def load_relationships(driver: GraphDatabase.driver) -> None:
     """
     Import relationships into the Neo4j database.
+
+    Parameters:
+        driver (GraphDatabase.driver): Neo4j driver.
     """
     rel_df = pd.read_parquet(
         f"{INDEXING_FOLDER}/create_final_relationships.parquet",
@@ -144,11 +151,14 @@ def load_relationships() -> None:
         RETURN count(*) as createdRels
     """
 
-    batched_import(rel_statement, rel_df)
+    batched_import(driver, rel_statement, rel_df)
 
-def load_communities() -> None:
+def load_communities(driver: GraphDatabase.driver) -> None:
     """
     Import communities into the Neo4j database.
+
+    Parameters:
+        driver (GraphDatabase.driver): Neo4j driver.
     """
     community_df = pd.read_parquet(
         f"{INDEXING_FOLDER}/create_final_communities.parquet",
@@ -172,11 +182,14 @@ def load_communities() -> None:
     RETURn count(distinct c) as createdCommunities
     """
 
-    batched_import(statement, community_df)
+    batched_import(driver, statement, community_df)
 
-def load_community_reports() -> None:
+def load_community_reports(driver: GraphDatabase.driver) -> None:
     """
     Import community reports into the Neo4j database.
+
+    Parameters:
+        driver (GraphDatabase.driver): Neo4j driver.
     """
     community_report_df = pd.read_parquet(
         f"{INDEXING_FOLDER}/create_final_community_reports.parquet",
@@ -202,17 +215,20 @@ def load_community_reports() -> None:
     MERGE (c)-[:HAS_FINDING]->(f:Finding {id:finding_idx})
     SET f += finding
     """
-    batched_import(community_statement, community_report_df)
+    batched_import(driver, community_statement, community_report_df)
 
-def load() -> None:
+def load(driver: GraphDatabase.driver) -> None:
     """
     Load all data into the Neo4j database.
+
+    Parameters:
+        driver (GraphDatabase.driver): Neo4j driver.
     """
-    create_constraints()
-    load_documents()
-    load_text_units()
-    load_nodes()
-    load_relationships()
-    load_communities()
-    load_community_reports()
+    create_constraints(driver)
+    load_documents(driver)
+    load_text_units(driver)
+    load_nodes(driver)
+    load_relationships(driver)
+    load_communities(driver)
+    load_community_reports(driver)
     print("Data loaded successfully.")
